@@ -83,23 +83,33 @@ async def get_financial_summary(db: AsyncSession, cod_cvm: str):
 
     summary = {}
     for conta_prefix, label in contas_chave.items():
+        # Buscar sem filtrar por ordem_exercicio (encoding pode variar)
         result = await db.execute(
             select(FinancialData)
             .where(
                 and_(
                     FinancialData.cod_cvm == cod_cvm,
                     FinancialData.conta == conta_prefix,
-                    FinancialData.ordem_exercicio == "ÚLTIMO",
                 )
             )
             .order_by(FinancialData.data_referencia.desc())
-            .limit(4)
+            .limit(8)
         )
         rows = result.scalars().all()
         if rows:
+            # Filtrar apenas o exercicio mais recente (ultimo ou penultimo)
+            vistos = set()
+            dedup = []
+            for r in rows:
+                key = r.data_referencia
+                if key not in vistos:
+                    vistos.add(key)
+                    dedup.append(r)
+                if len(dedup) >= 4:
+                    break
             summary[label] = [
                 {"data": r.data_referencia, "valor": r.valor, "valor_fmt": _format_brl(r.valor)}
-                for r in rows
+                for r in dedup
             ]
 
     return summary

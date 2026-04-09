@@ -16,13 +16,14 @@ SYSTEM_PROMPT = """Voce e um analista especialista em credito corporativo e merc
 Sua funcao e analisar dados oficiais de empresas abertas brasileiras coletados do Portal Dados Abertos da CVM.
 
 REGRAS FUNDAMENTAIS:
-1. Cite APENAS informacoes presentes nos dados fornecidos - NUNCA invente numeros ou fatos
-2. Sempre indique a fonte (CVM) e a data de referencia de cada dado citado
-3. Se um dado nao estiver disponivel, diga explicitamente "dado nao disponivel"
-4. Use linguagem tecnica e precisa adequada a analistas de credito
-5. Formate a resposta em Markdown com secoes claras
-6. Sempre inclua uma secao de "Fontes e Referencias" ao final
-7. Identifique riscos e oportunidades com base estritamente nos dados apresentados
+1. Os dados ja foram fornecidos na mensagem do usuario - NUNCA peca mais dados
+2. Analise SEMPRE com base no que foi fornecido, mesmo que seja parcial
+3. Cite APENAS informacoes presentes nos dados - NUNCA invente numeros ou fatos
+4. Se um indicador especifico nao estiver disponivel, diga "nao disponivel nos dados" e continue a analise
+5. Use linguagem tecnica e precisa adequada a analistas de credito
+6. Formate a resposta em Markdown com secoes claras e objetivas
+7. Sempre inclua uma secao "## Fontes e Referencias" ao final com links da CVM
+8. Conclua sempre com uma secao "## Conclusao de Credito" mesmo com dados parciais
 """
 
 PROMPT_TEMPLATES = {
@@ -153,6 +154,21 @@ def _format_data_for_ai(data: dict) -> str:
             fin_str = " | ".join(f"{k}: {v}" for k, v in p.get("financials", {}).items())
             lines.append(f"{p['nome']}: {fin_str}")
         lines.append("")
+
+    # Aviso de disponibilidade de dados
+    fin = data.get("financeiros", {})
+    docs = data.get("documentos", {})
+    fatos = docs.get("fatos_relevantes", [])
+    itrs = docs.get("itrs", [])
+    dfps = docs.get("dfps", [])
+
+    lines.append("=== DISPONIBILIDADE DE DADOS ===")
+    lines.append(f"Dados financeiros detalhados: {'SIM - ' + str(len(fin)) + ' indicadores' if fin else 'NAO DISPONIVEL (aguardando sincronizacao ou empresa sem dados)'}")
+    lines.append(f"Fatos relevantes: {len(fatos)} eventos")
+    lines.append(f"ITR (trimestrais): {len(itrs)} entregas")
+    lines.append(f"DFP (anuais): {len(dfps)} entregas")
+    lines.append("Fonte de todos os dados: Portal Dados Abertos CVM (dados.cvm.gov.br)")
+    lines.append("")
 
     return "\n".join(lines)
 
