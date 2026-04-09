@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visao 360 - Painel Admin</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128202;</text></svg>">
+</head>
+<body>
+<div class="navbar">
+    <div class="logo">Visao 360 &mdash; Admin</div>
+    <nav>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/admin" style="color:var(--accent-cyan);">Admin</a>
+        <button class="btn-logout" onclick="logout()">Sair</button>
+    </nav>
+</div>
+
+<div class="container">
+    <!-- Stats -->
+    <div class="admin-grid" id="statsGrid">
+        <div class="stat-card"><div class="number" id="statUsers">-</div><div class="label">Total Usuarios</div></div>
+        <div class="stat-card"><div class="number" id="statActive">-</div><div class="label">Ativos</div></div>
+        <div class="stat-card"><div class="number" id="statPending">-</div><div class="label">Pendentes</div></div>
+        <div class="stat-card"><div class="number" id="statQueries">-</div><div class="label">Consultas</div></div>
+        <div class="stat-card"><div class="number" id="statRating">-</div><div class="label">Nota Media</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('users', this)">Usuarios</button>
+        <button class="tab" onclick="switchTab('queries', this)">Consultas & Feedback</button>
+        <button class="tab" onclick="switchTab('prompts', this)">Prompts</button>
+        <button class="tab" onclick="switchTab('sync', this)">Dados CVM</button>
+    </div>
+
+    <!-- Tab: Users -->
+    <div class="tab-content active" id="tab-users">
+        <div class="card">
+            <h2><span class="icon">&#128100;</span> Gerenciamento de Usuarios</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Nome</th><th>Email</th><th>Status</th><th>Perfil</th><th>Cadastro</th><th>Aprovado</th><th>Acoes</th></tr></thead>
+                    <tbody id="usersBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Queries -->
+    <div class="tab-content" id="tab-queries">
+        <div class="card">
+            <h2><span class="icon">&#128269;</span> Historico de Consultas & Feedback dos Usuarios</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Data/Hora</th><th>Usuario</th><th>Empresa</th><th>Tipo Consulta</th><th>Avaliacao</th><th>Comentario</th></tr></thead>
+                    <tbody id="queriesBody"></tbody>
+                </table>
+            </div>
+            <div style="margin-top:1rem; display:flex; gap:0.5rem; align-items:center;">
+                <button class="btn btn-sm btn-outline" id="btnPrevPage" onclick="changePage(-1)">&#8592; Anterior</button>
+                <span id="pageInfo" style="padding:0.4rem 0.8rem; font-size:0.85rem; color:var(--text-muted);"></span>
+                <button class="btn btn-sm btn-outline" id="btnNextPage" onclick="changePage(1)">Proxima &#8594;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Prompts -->
+    <div class="tab-content" id="tab-prompts">
+        <div class="card">
+            <h2><span class="icon">&#9998;</span> Prompts Parametrizaveis de Analise</h2>
+            <p style="color:var(--text-muted); margin-bottom:1.5rem; font-size:0.88rem;">
+                Configure os templates de analise disponíveis. Use <code style="background:var(--bg-surface);padding:0.15rem 0.5rem;border-radius:4px;color:var(--accent-cyan);">{empresa}</code> como variavel para o nome da empresa.
+            </p>
+            <div id="promptsList"></div>
+
+            <div style="margin-top:2rem; padding-top:1.5rem; border-top:1px solid var(--border);">
+                <h3 style="margin-bottom:1rem; font-size:1rem;">Criar Novo Prompt</h3>
+                <form id="newPromptForm">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                        <div class="form-group">
+                            <label>Nome</label>
+                            <input type="text" id="pNome" required placeholder="Ex: Analise de Fluxo de Caixa">
+                        </div>
+                        <div class="form-group">
+                            <label>Categoria</label>
+                            <select id="pCategoria">
+                                <option value="financeiro">Financeiro</option>
+                                <option value="credito">Credito</option>
+                                <option value="estrategico">Estrategico</option>
+                                <option value="comparativo">Comparativo</option>
+                                <option value="geral">Geral</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Descricao</label>
+                        <input type="text" id="pDescricao" placeholder="Descricao breve do que este prompt analisa">
+                    </div>
+                    <div class="form-group">
+                        <label>Template do Prompt</label>
+                        <textarea id="pTemplate" rows="4" required placeholder="Analise a empresa {empresa} considerando..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-accent">Criar Prompt</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Sync -->
+    <div class="tab-content" id="tab-sync">
+        <div class="card">
+            <h2><span class="icon">&#128259;</span> Sincronizacao de Dados - Portal CVM</h2>
+            <p style="color:var(--text-secondary); margin-bottom:0.5rem; font-size:0.9rem;">
+                Os dados sao sincronizados automaticamente todos os dias as <strong>06:00 UTC</strong>.
+            </p>
+            <p style="color:var(--text-muted); margin-bottom:1.5rem; font-size:0.85rem;">
+                A sincronizacao baixa dados de cadastro, ITR, DFP, IPE e demonstracoes financeiras detalhadas do portal oficial da CVM.
+            </p>
+
+            <div style="display:flex; flex-wrap:wrap; gap:0.8rem; margin-bottom:1.5rem;">
+                <a href="https://dados.cvm.gov.br/dataset/cia_aberta-cad" target="_blank" class="btn btn-sm btn-outline">Cadastro CVM &rarr;</a>
+                <a href="https://dados.cvm.gov.br/dataset/cia_aberta-doc-itr" target="_blank" class="btn btn-sm btn-outline">ITR &rarr;</a>
+                <a href="https://dados.cvm.gov.br/dataset/cia_aberta-doc-dfp" target="_blank" class="btn btn-sm btn-outline">DFP &rarr;</a>
+                <a href="https://dados.cvm.gov.br/dataset/cia_aberta-doc-ipe" target="_blank" class="btn btn-sm btn-outline">IPE &rarr;</a>
+                <a href="https://dados.cvm.gov.br/" target="_blank" class="btn btn-sm btn-outline">Portal Dados Abertos &rarr;</a>
+            </div>
+
+            <button class="btn btn-accent" onclick="triggerSync()" id="btnSync">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                Sincronizar Agora
+            </button>
+            <div id="syncResult" style="margin-top:1rem; display:none;" class="alert"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const user = JSON.parse(localStorage.getItem('user') || 'null');
+if (!user || !user.is_admin) window.location.href = '/';
+
+let currentPage = 1;
+
+function logout() {
+    fetch('/api/auth/logout', {method:'POST'});
+    localStorage.removeItem('user');
+    window.location.href = '/';
+}
+
+function switchTab(name, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+}
+
+async function loadStats() {
+    try {
+        const res = await fetch('/api/admin/stats');
+        if (res.status === 401 || res.status === 403) { window.location.href = '/'; return; }
+        const d = await res.json();
+        document.getElementById('statUsers').textContent = d.total_users;
+        document.getElementById('statActive').textContent = d.active_users;
+        document.getElementById('statPending').textContent = d.pending_users;
+        document.getElementById('statQueries').textContent = d.total_queries;
+        document.getElementById('statRating').textContent = d.avg_rating ? d.avg_rating + '/5' : 'N/D';
+    } catch(e) { console.error(e); }
+}
+
+async function loadUsers() {
+    try {
+        const res = await fetch('/api/admin/users');
+        if (!res.ok) return;
+        const users = await res.json();
+        document.getElementById('usersBody').innerHTML = users.map(u => `
+            <tr>
+                <td style="font-weight:600;">${u.name}</td>
+                <td style="color:var(--text-secondary);">${u.email}</td>
+                <td><span class="badge ${u.is_active ? 'badge-active' : 'badge-pending'}">${u.is_active ? 'Ativo' : 'Pendente'}</span></td>
+                <td>${u.is_admin ? '<span class="badge" style="background:rgba(139,92,246,0.12);color:#a78bfa;">Admin</span>' : '<span style="color:var(--text-muted);">Usuario</span>'}</td>
+                <td style="color:var(--text-muted);">${u.created_at ? u.created_at.substring(0, 10) : 'N/D'}</td>
+                <td style="color:var(--text-muted);">${u.approved_at ? u.approved_at.substring(0, 10) : '&mdash;'}</td>
+                <td>
+                    ${!u.is_active && !u.is_admin ? `<button class="btn btn-accent btn-sm" onclick="approveUser(${u.id})">Aprovar</button>` : ''}
+                    ${u.is_active && !u.is_admin ? `<button class="btn btn-danger btn-sm" onclick="deactivateUser(${u.id})">Desativar</button>` : ''}
+                </td>
+            </tr>
+        `).join('') || '<tr><td colspan="7" class="empty-state">Nenhum usuario alem do admin</td></tr>';
+    } catch(e) { console.error(e); }
+}
+
+async function approveUser(id) {
+    await fetch(`/api/admin/users/${id}/approve`, {method:'POST'});
+    loadUsers(); loadStats();
+}
+
+async function deactivateUser(id) {
+    if (!confirm('Desativar este usuario?')) return;
+    await fetch(`/api/admin/users/${id}/deactivate`, {method:'POST'});
+    loadUsers(); loadStats();
+}
+
+async function loadQueries(page) {
+    currentPage = page || 1;
+    try {
+        const res = await fetch(`/api/admin/queries?page=${currentPage}&per_page=30`);
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('queriesBody').innerHTML = data.queries.length > 0
+            ? data.queries.map(q => `
+                <tr>
+                    <td style="white-space:nowrap; color:var(--text-muted);">${q.created_at ? q.created_at.substring(0, 16).replace('T', ' ') : 'N/D'}</td>
+                    <td><strong>${q.user_name}</strong><br><span style="color:var(--text-muted);font-size:0.78rem;">${q.user_email}</span></td>
+                    <td style="font-weight:600; color:var(--accent-cyan);">${q.company_name || 'N/D'}</td>
+                    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;color:var(--text-secondary);">${q.query_text}</td>
+                    <td>${q.feedback_rating ? '<span style="color:var(--accent-orange);">' + '&#9733;'.repeat(q.feedback_rating) + '<span style="color:var(--text-muted);">' + '&#9733;'.repeat(5 - q.feedback_rating) + '</span></span>' : '<span style="color:var(--text-muted);">-</span>'}</td>
+                    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;color:var(--text-secondary);">${q.feedback_comment || '<span style="color:var(--text-muted);">-</span>'}</td>
+                </tr>
+            `).join('')
+            : '<tr><td colspan="6" class="empty-state">Nenhuma consulta registrada ainda</td></tr>';
+        const totalPages = Math.ceil(data.total / data.per_page) || 1;
+        document.getElementById('pageInfo').textContent = `Pag. ${currentPage} de ${totalPages} (${data.total} total)`;
+        document.getElementById('btnPrevPage').disabled = currentPage <= 1;
+        document.getElementById('btnNextPage').disabled = currentPage >= totalPages;
+    } catch(e) { console.error(e); }
+}
+
+function changePage(delta) { loadQueries(currentPage + delta); }
+
+async function loadPrompts() {
+    try {
+        const res = await fetch('/api/admin/prompts');
+        if (!res.ok) return;
+        const prompts = await res.json();
+        document.getElementById('promptsList').innerHTML = prompts.length > 0
+            ? prompts.map(p => `
+                <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:1.2rem;margin-bottom:0.8rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                        <strong style="font-size:0.95rem;">${p.nome}</strong>
+                        <div style="display:flex;gap:0.5rem;align-items:center;">
+                            <span class="badge" style="background:rgba(79,125,249,0.1);color:var(--accent-blue-light);">${p.categoria || 'geral'}</span>
+                            <span class="badge ${p.is_active ? 'badge-active' : 'badge-inactive'}">${p.is_active ? 'Ativo' : 'Inativo'}</span>
+                        </div>
+                    </div>
+                    ${p.descricao ? `<p style="color:var(--text-muted);font-size:0.82rem;margin-bottom:0.5rem;">${p.descricao}</p>` : ''}
+                    <pre style="background:var(--bg-dark);padding:0.8rem;border-radius:8px;font-size:0.8rem;white-space:pre-wrap;color:var(--text-secondary);border:1px solid var(--border);font-family:inherit;">${p.prompt_template}</pre>
+                </div>
+            `).join('')
+            : '<p style="color:var(--text-muted);padding:1rem 0;">Nenhum prompt customizado. Os 5 prompts padrao sao carregados automaticamente no dashboard.</p>';
+    } catch(e) { console.error(e); }
+}
+
+document.getElementById('newPromptForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+        const res = await fetch('/api/admin/prompts', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                nome: document.getElementById('pNome').value,
+                descricao: document.getElementById('pDescricao').value,
+                prompt_template: document.getElementById('pTemplate').value,
+                categoria: document.getElementById('pCategoria').value,
+            }),
+        });
+        if (res.ok) { document.getElementById('newPromptForm').reset(); loadPrompts(); }
+        else { const err = await res.json(); alert(err.detail || 'Erro ao criar'); }
+    } catch(e) { alert('Erro de conexao'); }
+});
+
+async function triggerSync() {
+    const btn = document.getElementById('btnSync');
+    const result = document.getElementById('syncResult');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;margin:0;"></div> Sincronizando...';
+    result.style.display = 'none';
+
+    try {
+        const res = await fetch('/api/admin/sync', {method:'POST'});
+        const data = await res.json();
+        result.className = 'alert alert-success';
+        result.innerHTML = `<strong>${data.message}</strong><pre style="font-size:0.8rem;margin-top:0.5rem;white-space:pre-wrap;color:var(--accent-green);">${JSON.stringify(data.results, null, 2)}</pre>`;
+    } catch(e) {
+        result.className = 'alert alert-error';
+        result.textContent = 'Erro na sincronizacao: ' + e.message;
+    }
+    result.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg> Sincronizar Agora`;
+}
+
+loadStats(); loadUsers(); loadQueries(1); loadPrompts();
+</script>
+</body>
+</html>

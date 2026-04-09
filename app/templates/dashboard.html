@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visao 360 - Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128202;</text></svg>">
+</head>
+<body>
+<div class="navbar">
+    <div class="logo">Visao 360</div>
+    <nav>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/admin" id="adminLink" style="display:none;">Painel Admin</a>
+        <button class="btn-logout" onclick="logout()">Sair</button>
+    </nav>
+</div>
+
+<div class="container">
+    <!-- SEARCH -->
+    <div class="search-section">
+        <h2>Analise 360 de Empresas Abertas</h2>
+        <p class="search-subtitle">Busque por qualquer empresa registrada na CVM para obter analise completa com dados oficiais</p>
+        <div class="search-row">
+            <div class="form-group" style="position:relative;">
+                <label>Empresa</label>
+                <input type="text" id="searchInput" placeholder="Digite o nome... Ex: PETROBRAS, VALE, ITAU, AMBEV" autocomplete="off">
+                <div class="suggestion-list" id="suggestionList"></div>
+            </div>
+            <button class="btn btn-accent" onclick="runAnalysis()" id="btnAnalyze">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Analisar
+            </button>
+        </div>
+
+        <div class="prompt-selector" id="promptSelector"></div>
+
+        <div class="prompt-edit-area" id="promptEditArea" style="display:none;">
+            <div class="form-group" style="margin:0;">
+                <label>Prompt personalizado (use {empresa} como variavel)</label>
+                <textarea id="customPrompt" rows="3" placeholder="Escreva seu prompt de analise customizado aqui..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOADING -->
+    <div id="loading" class="loading" style="display:none;">
+        <div class="spinner"></div>
+        <p>Buscando e analisando dados oficiais da CVM...</p>
+        <p class="data-date" style="margin-top:0.5rem;">Fonte: Portal Dados Abertos CVM (dados.cvm.gov.br)</p>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="results" style="display:none;">
+        <div class="results-grid">
+            <div class="card" id="cardCadastro">
+                <h2><span class="icon">&#127970;</span> Dados Cadastrais</h2>
+                <div id="cadastroContent"></div>
+            </div>
+
+            <div class="card" id="cardIndicadores">
+                <h2><span class="icon">&#128200;</span> Indicadores Financeiros</h2>
+                <div id="indicadoresContent"></div>
+            </div>
+
+            <div class="card card-full" id="cardFinanceiro">
+                <h2><span class="icon">&#128176;</span> Demonstracoes Financeiras (DFP / ITR)</h2>
+                <div id="financeiroContent"></div>
+            </div>
+
+            <div class="card card-full" id="cardFatos">
+                <h2><span class="icon">&#128240;</span> Fatos Relevantes (IPE)</h2>
+                <div id="fatosContent"></div>
+            </div>
+
+            <div class="card" id="cardITR">
+                <h2><span class="icon">&#128196;</span> ITR - Trimestrais</h2>
+                <div id="itrContent"></div>
+            </div>
+
+            <div class="card" id="cardDFP">
+                <h2><span class="icon">&#128209;</span> DFP - Anuais</h2>
+                <div id="dfpContent"></div>
+            </div>
+
+            <div class="card card-full" id="cardPares">
+                <h2><span class="icon">&#128101;</span> Comparacao com Pares do Setor</h2>
+                <div id="paresContent"></div>
+            </div>
+        </div>
+
+        <!-- FEEDBACK -->
+        <div class="feedback-section" id="feedbackSection">
+            <h3>Esta analise foi util?</h3>
+            <div class="stars" id="starsContainer">
+                <span class="star" data-rating="1">&#9733;</span>
+                <span class="star" data-rating="2">&#9733;</span>
+                <span class="star" data-rating="3">&#9733;</span>
+                <span class="star" data-rating="4">&#9733;</span>
+                <span class="star" data-rating="5">&#9733;</span>
+            </div>
+            <div class="form-group" style="margin-top:0.8rem;">
+                <textarea id="feedbackComment" placeholder="Deixe um comentario (opcional)..." rows="2"></textarea>
+            </div>
+            <button class="btn btn-accent btn-sm" onclick="submitFeedback()">Enviar Feedback</button>
+            <div id="feedbackAlert" class="alert" style="display:none; margin-top:0.5rem;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentQueryId = null;
+let selectedRating = 0;
+let selectedPromptId = 'visao_geral';
+let prompts = [];
+
+const user = JSON.parse(localStorage.getItem('user') || 'null');
+if (!user) window.location.href = '/';
+if (user && user.is_admin) document.getElementById('adminLink').style.display = '';
+
+function logout() {
+    fetch('/api/auth/logout', {method:'POST'});
+    localStorage.removeItem('user');
+    window.location.href = '/';
+}
+
+async function loadPrompts() {
+    try {
+        const res = await fetch('/api/prompts');
+        if (res.status === 401) { window.location.href = '/'; return; }
+        prompts = await res.json();
+        const container = document.getElementById('promptSelector');
+        container.innerHTML = prompts.map(p =>
+            `<button class="prompt-chip ${p.id === selectedPromptId ? 'active' : ''}"
+                     data-id="${p.id}" onclick="selectPrompt('${p.id}', this)">${p.nome}</button>`
+        ).join('') +
+        `<button class="prompt-chip" onclick="toggleCustomPrompt(this)">+ Prompt Personalizado</button>`;
+    } catch(e) { console.error(e); }
+}
+
+function selectPrompt(id, el) {
+    selectedPromptId = id;
+    document.querySelectorAll('.prompt-chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('promptEditArea').style.display = 'none';
+    const prompt = prompts.find(p => p.id === id);
+    if (prompt) document.getElementById('customPrompt').value = prompt.prompt;
+}
+
+function toggleCustomPrompt(el) {
+    selectedPromptId = null;
+    document.querySelectorAll('.prompt-chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    const area = document.getElementById('promptEditArea');
+    area.style.display = area.style.display === 'none' ? 'block' : 'none';
+}
+
+// Autocomplete
+let searchTimeout;
+const searchInput = document.getElementById('searchInput');
+const suggestionList = document.getElementById('suggestionList');
+
+searchInput.addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    const q = e.target.value.trim();
+    if (q.length < 2) { suggestionList.style.display = 'none'; return; }
+    searchTimeout = setTimeout(async () => {
+        try {
+            const res = await fetch(`/api/companies/search?q=${encodeURIComponent(q)}`);
+            if (!res.ok) return;
+            const companies = await res.json();
+            if (companies.length === 0) { suggestionList.style.display = 'none'; return; }
+            suggestionList.innerHTML = companies.map(c =>
+                `<div class="suggestion-item" onclick="pickCompany('${c.nome.replace(/'/g, "\\'")}')">
+                    <strong>${c.nome}</strong>
+                    <span class="sector">${c.setor || ''} &bull; ${c.situacao}</span>
+                </div>`
+            ).join('');
+            suggestionList.style.display = 'block';
+        } catch(e) { console.error(e); }
+    }, 250);
+});
+
+function pickCompany(name) {
+    searchInput.value = name;
+    suggestionList.style.display = 'none';
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.form-group')) suggestionList.style.display = 'none';
+});
+
+async function runAnalysis() {
+    const empresa = searchInput.value.trim();
+    if (!empresa) { searchInput.focus(); return; }
+
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('loading').style.display = 'block';
+
+    try {
+        const body = { empresa, prompt_id: selectedPromptId };
+        const customPrompt = document.getElementById('customPrompt').value.trim();
+        if (!selectedPromptId && customPrompt) body.custom_prompt = customPrompt;
+
+        const res = await fetch('/api/analysis', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        });
+
+        if (res.status === 401) { window.location.href = '/'; return; }
+        if (!res.ok) {
+            const err = await res.json();
+            alert(err.detail || 'Erro na analise');
+            document.getElementById('loading').style.display = 'none';
+            return;
+        }
+
+        const data = await res.json();
+        currentQueryId = data.query_id;
+        renderResults(data);
+    } catch(e) {
+        alert('Erro de conexao: ' + e.message);
+    } finally {
+        document.getElementById('loading').style.display = 'none';
+    }
+}
+
+function renderResults(data) {
+    const c = data.cadastro;
+    document.getElementById('cadastroContent').innerHTML = `
+        <div class="info-row"><span class="label">Nome Oficial</span><span class="value">${c.nome}</span></div>
+        <div class="info-row"><span class="label">Pregao</span><span class="value">${c.nome_pregao || 'N/D'}</span></div>
+        <div class="info-row"><span class="label">CNPJ</span><span class="value">${c.cnpj}</span></div>
+        <div class="info-row"><span class="label">Setor</span><span class="value">${c.setor || 'N/D'}</span></div>
+        <div class="info-row"><span class="label">Situacao CVM</span><span class="value"><span class="badge badge-active">${c.situacao}</span></span></div>
+        <div class="info-row"><span class="label">Data Registro</span><span class="value">${c.data_registro_cvm}</span></div>
+        <div class="info-row"><span class="label">Cod. CVM</span><span class="value">${c.cod_cvm}</span></div>
+        <a href="${c.fonte}" target="_blank" class="source-link">&#128279; Fonte: Cadastro Cias Abertas CVM</a>
+        <span class="data-date"> | Consulta: ${c.data_consulta}</span>`;
+
+    const ind = data.indicadores;
+    const indKeys = Object.keys(ind);
+    document.getElementById('indicadoresContent').innerHTML = indKeys.length > 0
+        ? indKeys.map(k => {
+            const v = ind[k];
+            const num = parseFloat(v);
+            const cls = v.startsWith('-') ? 'negative' : (num > 0 ? 'positive' : '');
+            return `<div class="info-row"><span class="label">${k}</span><span class="value ${cls}">${v}</span></div>`;
+        }).join('') + `<a href="https://dados.cvm.gov.br/dataset/cia_aberta-doc-dfp" target="_blank" class="source-link">&#128279; Fonte: DFP/ITR CVM</a>
+        <span class="data-date"> | ${data.data_analise}</span>`
+        : '<p class="empty-state">Dados de indicadores nao disponiveis para esta empresa</p>';
+
+    const fin = data.financeiros;
+    const finKeys = Object.keys(fin);
+    if (finKeys.length > 0) {
+        let html = '<div class="table-wrap"><table><thead><tr><th>Conta</th><th>Periodo</th><th>Valor</th></tr></thead><tbody>';
+        for (const key of finKeys) {
+            for (const item of fin[key]) {
+                const cls = item.valor < 0 ? 'negative' : 'positive';
+                html += `<tr><td>${key}</td><td>${item.data}</td><td style="color:var(--accent-${item.valor < 0 ? 'red' : 'green'}); font-weight:600;">${item.valor_fmt}</td></tr>`;
+            }
+        }
+        html += '</tbody></table></div>';
+        html += `<a href="https://dados.cvm.gov.br/dataset/cia_aberta-doc-dfp" target="_blank" class="source-link">&#128279; DFP CVM</a>
+                 <a href="https://dados.cvm.gov.br/dataset/cia_aberta-doc-itr" target="_blank" class="source-link" style="margin-left:1rem;">&#128279; ITR CVM</a>`;
+        document.getElementById('financeiroContent').innerHTML = html;
+    } else {
+        document.getElementById('financeiroContent').innerHTML = '<p class="empty-state">Execute a sincronizacao de dados no painel admin para carregar demonstracoes financeiras</p>';
+    }
+
+    const fatos = data.documentos.fatos_relevantes;
+    if (fatos.length > 0) {
+        let html = '<div class="table-wrap"><table><thead><tr><th>Data Ref.</th><th>Assunto</th><th>Entrega</th><th>Documento</th></tr></thead><tbody>';
+        for (const f of fatos) {
+            html += `<tr>
+                <td>${f.data_referencia || 'N/D'}</td>
+                <td>${f.descricao || 'N/D'}</td>
+                <td>${f.data_entrega || 'N/D'}</td>
+                <td>${f.link ? `<a href="${f.link}" target="_blank">Abrir &rarr;</a>` : `<a href="${data.documentos.fonte_ipe}" target="_blank">Portal CVM</a>`}</td>
+            </tr>`;
+        }
+        html += '</tbody></table></div>';
+        html += `<a href="${data.documentos.fonte_ipe}" target="_blank" class="source-link">&#128279; Fonte: IPE - Informacoes Periodicas e Eventuais CVM</a>`;
+        document.getElementById('fatosContent').innerHTML = html;
+    } else {
+        document.getElementById('fatosContent').innerHTML = '<p class="empty-state">Nenhum fato relevante encontrado no periodo</p>';
+    }
+
+    renderDocTable('itrContent', data.documentos.itrs, data.documentos.fonte_itr, 'ITR CVM');
+    renderDocTable('dfpContent', data.documentos.dfps, data.documentos.fonte_dfp, 'DFP CVM');
+
+    const pares = data.pares;
+    if (pares.length > 0) {
+        let html = '<div class="table-wrap"><table><thead><tr><th>Empresa</th>';
+        const finLabels = pares[0].financials ? Object.keys(pares[0].financials) : [];
+        for (const l of finLabels) html += `<th>${l}</th>`;
+        html += '</tr></thead><tbody>';
+        for (const p of pares) {
+            html += `<tr><td style="font-weight:600;">${p.nome}</td>`;
+            for (const l of finLabels) html += `<td>${p.financials[l] || 'N/D'}</td>`;
+            html += '</tr>';
+        }
+        html += '</tbody></table></div>';
+        html += `<a href="https://dados.cvm.gov.br/group/companhias" target="_blank" class="source-link">&#128279; Fonte: Portal CVM - Companhias do mesmo setor</a>`;
+        document.getElementById('paresContent').innerHTML = html;
+    } else {
+        document.getElementById('paresContent').innerHTML = '<p class="empty-state">Nenhum par encontrado no mesmo setor</p>';
+    }
+
+    selectedRating = 0;
+    document.querySelectorAll('#starsContainer .star').forEach(s => s.classList.remove('filled'));
+    document.getElementById('feedbackComment').value = '';
+    document.getElementById('feedbackAlert').style.display = 'none';
+
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results').scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+
+function renderDocTable(containerId, docs, fonte, label) {
+    if (docs && docs.length > 0) {
+        let html = '<div class="table-wrap"><table><thead><tr><th>Referencia</th><th>Entrega</th><th>Versao</th><th>Documento</th></tr></thead><tbody>';
+        for (const d of docs) {
+            html += `<tr>
+                <td>${d.data_referencia || 'N/D'}</td>
+                <td>${d.data_entrega || 'N/D'}</td>
+                <td>${d.versao || '1'}</td>
+                <td>${d.link ? `<a href="${d.link}" target="_blank">Abrir &rarr;</a>` : `<a href="${fonte}" target="_blank">Portal CVM</a>`}</td>
+            </tr>`;
+        }
+        html += '</tbody></table></div>';
+        html += `<a href="${fonte}" target="_blank" class="source-link">&#128279; Fonte: ${label}</a>`;
+        document.getElementById(containerId).innerHTML = html;
+    } else {
+        document.getElementById(containerId).innerHTML = '<p class="empty-state">Nenhum documento encontrado</p>';
+    }
+}
+
+// Stars
+document.querySelectorAll('#starsContainer .star').forEach(star => {
+    star.addEventListener('click', () => {
+        selectedRating = parseInt(star.dataset.rating);
+        document.querySelectorAll('#starsContainer .star').forEach((s, i) => {
+            s.classList.toggle('filled', i < selectedRating);
+        });
+    });
+    star.addEventListener('mouseover', () => {
+        const r = parseInt(star.dataset.rating);
+        document.querySelectorAll('#starsContainer .star').forEach((s, i) => {
+            s.classList.toggle('filled', i < r);
+        });
+    });
+    star.addEventListener('mouseout', () => {
+        document.querySelectorAll('#starsContainer .star').forEach((s, i) => {
+            s.classList.toggle('filled', i < selectedRating);
+        });
+    });
+});
+
+async function submitFeedback() {
+    if (!currentQueryId || !selectedRating) return alert('Selecione uma nota');
+    const alertEl = document.getElementById('feedbackAlert');
+    try {
+        const res = await fetch('/api/feedback', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                query_id: currentQueryId,
+                rating: selectedRating,
+                comment: document.getElementById('feedbackComment').value || null,
+            }),
+        });
+        alertEl.className = res.ok ? 'alert alert-success' : 'alert alert-error';
+        alertEl.textContent = res.ok ? 'Feedback registrado com sucesso!' : 'Erro ao enviar feedback';
+    } catch(e) {
+        alertEl.className = 'alert alert-error';
+        alertEl.textContent = 'Erro de conexao';
+    }
+    alertEl.style.display = 'block';
+}
+
+searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') runAnalysis(); });
+loadPrompts();
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visao 360 - Login</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128202;</text></svg>">
+</head>
+<body>
+<div class="auth-container">
+    <div class="auth-card">
+        <h1>Visao 360</h1>
+        <p class="subtitle">Inteligencia para Credito Corporativo</p>
+
+        <div id="alert" class="alert" style="display:none;"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="email" required placeholder="seu@email.com" autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label>Senha</label>
+                <input type="password" id="password" required placeholder="Sua senha" autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn btn-primary" id="btnLogin">Entrar</button>
+        </form>
+
+        <div class="link">
+            Nao tem acesso? <a href="/register">Solicitar conta</a>
+        </div>
+
+        <div style="text-align:center; margin-top:2rem; padding-top:1.2rem; border-top:1px solid var(--border);">
+            <span style="color:var(--text-muted); font-size:0.75rem;">Dados abertos CVM &bull; Empresas Abertas B3</span>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const alertEl = document.getElementById('alert');
+    const btn = document.getElementById('btnLogin');
+    alertEl.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Entrando...';
+
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+            }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            localStorage.setItem('user', JSON.stringify(data.user));
+            window.location.href = data.user.is_admin ? '/admin' : '/dashboard';
+        } else {
+            alertEl.className = 'alert alert-error';
+            alertEl.textContent = data.detail || 'Erro ao fazer login';
+            alertEl.style.display = 'block';
+        }
+    } catch (err) {
+        alertEl.className = 'alert alert-error';
+        alertEl.textContent = 'Erro de conexao com o servidor';
+        alertEl.style.display = 'block';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+});
+</script>
+</body>
+</html>
