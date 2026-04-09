@@ -212,22 +212,44 @@ async def sync_itr_dfp(db: AsyncSession, tipo: str, ano: int) -> int:
     return count
 
 
+def _read_named_csv_from_zip(zip_content: bytes, filename: str, encoding: str = "latin-1") -> pd.DataFrame | None:
+    """Le um CSV especifico de dentro de um ZIP pelo nome."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_content)) as z:
+            if filename not in z.namelist():
+                return None
+            with z.open(filename) as f:
+                raw = f.read().decode(encoding, errors="replace")
+                return pd.read_csv(io.StringIO(raw), sep=";", on_bad_lines="skip")
+    except Exception as e:
+        logger.error(f"Erro ao ler {filename} do ZIP: {e}")
+        return None
+
+
 async def sync_financial_zip(db: AsyncSession, tipo_doc: str, subtipo: str, ano: int) -> int:
-    """Sincroniza dados financeiros detalhados (BPA, BPP, DRE, DFC) de ZIPs."""
-    # Tentar consolidado primeiro, depois individual
-    for sufixo in ["con", "ind"]:
-        url = f"{BASE_URL}/DOC/{tipo_doc}/DADOS/{tipo_doc.lower()}_cia_aberta_{subtipo}_{sufixo}_{ano}.zip"
-        content = await _fetch_bytes(url)
-        if content:
-            break
-    else:
+    """Sincroniza dados financeiros detalhados (BPA, BPP, DRE, DFC).
+    Os arquivos estao dentro do ZIP principal do tipo_doc.
+    Ex: dfp_cia_aberta_2025.zip contem dfp_cia_aberta_BPA_con_2025.csv
+    """
+    url = f"{BASE_URL}/DOC/{tipo_doc}/DADOS/{tipo_doc.lower()}_cia_aberta_{ano}.zip"
+    content = await _fetch_bytes(url)
+    if not content:
         return 0
 
-    df = _read_csv_from_zip(content)
+    # Nome do CSV dentro do ZIP: tipo_cia_aberta_SUBTIPO_con_ano.csv
+    tipo_lower = tipo_doc.lower()
+    filename = f"{tipo_lower}_cia_aberta_{subtipo}_con_{ano}.csv"
+    df = _read_named_csv_from_zip(content, filename)
     if df is None:
+        # Tentar individual se consolidado nao existir
+        filename = f"{tipo_lower}_cia_aberta_{subtipo}_ind_{ano}.csv"
+        df = _read_named_csv_from_zip(content, filename)
+    if df is None:
+        logger.warning(f"Arquivo {filename} nao encontrado no ZIP {tipo_doc} {ano}")
         return 0
 
-    # Colunas: CD_CVM, DT_REFER, CD_CONTA, DS_CONTA, VL_CONTA, ESCALA_MOEDA, MOEDA, ORDEM_EXERC
+    logger.info(f"Colunas {tipo_doc} {subtipo} {ano}: {list(df.columns)}")
+
     col_cvm = next((c for c in df.columns if c in ["CD_CVM", "Codigo_CVM"]), None)
     if not col_cvm:
         return 0
@@ -290,15 +312,16 @@ async def run_full_sync(db: AsyncSession) -> dict:
     results["dfp_anterior"] = await sync_itr_dfp(db, "DFP", ano_ant)
     results["dfp_atual"] = await sync_itr_dfp(db, "DFP", ano)
 
-    # 6. Dados financeiros detalhados (DFP do ano anterior)
-    for subtipo in ["BPA", "BPP", "DRE", "DFC_MI"]:
+    # 6. Dados financeiros detalhados - DFP ano anterior (BPA, BPP, DRE, DFC)
+    # Os CSVs estao dentro do ZIP principal: dfp_cia_aberta_{ano}.zip
+    for subtipo in ["BPA", "BPP", "DRE", "DFC_MI", "DVA"]:
         key = f"dfp_{subtipo.lower()}"
         results[key] = await sync_financial_zip(db, "DFP", subtipo, ano_ant)
 
-    # 7. Dados financeiros ITR (ano atual)
+    # 7. Dados financeiros ITR - ano atual e anterior
     for subtipo in ["BPA", "DRE"]:
-        key = f"itr_{subtipo.lower()}"
-        results[key] = await sync_financial_zip(db, "ITR", subtipo, ano)
+        results[f"itr_{subtipo.lower()}_atual"] = await sync_financial_zip(db, "ITR", subtipo, ano)
+        results[f"itr_{subtipo.lower()}_ant"] = await sync_financial_zip(db, "ITR", subtipo, ano_ant)
 
     total_docs = sum(v for k, v in results.items() if k != "companies")
     logger.info(f"=== SINCRONIZACAO COMPLETA: {results} ===")
