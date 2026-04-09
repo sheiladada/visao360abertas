@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "admin123")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 horas
     ALGORITHM: str = "HS256"
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
     class Config:
         env_file = ".env"

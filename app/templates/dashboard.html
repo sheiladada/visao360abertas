@@ -6,6 +6,7 @@
     <title>Visao 360 - Dashboard</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128202;</text></svg>">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
 <div class="navbar">
@@ -87,6 +88,14 @@
             <div class="card card-full" id="cardPares">
                 <h2><span class="icon">&#128101;</span> Comparacao com Pares do Setor</h2>
                 <div id="paresContent"></div>
+            </div>
+
+            <!-- ANALISE IA -->
+            <div class="card card-full" id="cardAI" style="display:none;">
+                <h2><span class="icon">&#129302;</span> Analise Especialista por IA
+                    <span style="font-size:0.75rem;font-weight:400;color:var(--accent-cyan);margin-left:auto;">Gerado por Claude AI com dados oficiais CVM</span>
+                </h2>
+                <div id="aiContent" class="ai-analysis"></div>
             </div>
         </div>
 
@@ -307,6 +316,16 @@ function renderResults(data) {
         document.getElementById('paresContent').innerHTML = html;
     } else {
         document.getElementById('paresContent').innerHTML = '<p class="empty-state">Nenhum par encontrado no mesmo setor</p>';
+    }
+
+    // Analise IA
+    const aiCard = document.getElementById('cardAI');
+    const aiContent = document.getElementById('aiContent');
+    if (data.ai_analysis) {
+        aiContent.innerHTML = marked.parse(data.ai_analysis);
+        aiCard.style.display = 'block';
+    } else {
+        aiCard.style.display = 'none';
     }
 
     selectedRating = 0;

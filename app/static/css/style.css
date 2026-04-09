@@ -574,6 +574,37 @@ td a:hover { text-decoration: underline; color: var(--accent-cyan); }
     margin-left: 0.3rem;
 }
 
+/* === AI ANALYSIS MARKDOWN === */
+.ai-analysis { line-height: 1.8; color: var(--text-primary); }
+.ai-analysis h1, .ai-analysis h2, .ai-analysis h3 {
+    color: var(--accent-cyan);
+    margin: 1.2rem 0 0.5rem;
+    font-weight: 700;
+}
+.ai-analysis h1 { font-size: 1.2rem; }
+.ai-analysis h2 { font-size: 1.05rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+.ai-analysis h3 { font-size: 0.95rem; color: var(--accent-blue-light); }
+.ai-analysis p { margin-bottom: 0.8rem; color: var(--text-secondary); }
+.ai-analysis ul, .ai-analysis ol { padding-left: 1.5rem; margin-bottom: 0.8rem; }
+.ai-analysis li { color: var(--text-secondary); margin-bottom: 0.3rem; }
+.ai-analysis strong { color: var(--text-primary); font-weight: 700; }
+.ai-analysis em { color: var(--accent-orange); font-style: normal; font-weight: 600; }
+.ai-analysis code {
+    background: var(--bg-surface);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--accent-cyan);
+}
+.ai-analysis blockquote {
+    border-left: 3px solid var(--accent-blue);
+    padding-left: 1rem;
+    margin: 0.8rem 0;
+    color: var(--text-muted);
+}
+.ai-analysis table { margin: 1rem 0; }
+.ai-analysis hr { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+
 /* === RESPONSIVE === */
 @media (max-width: 640px) {
     .container { padding: 1rem; }

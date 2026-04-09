@@ -9,6 +9,7 @@ from app.services.analysis_service import (
     search_companies, generate_analysis_360,
     get_company_documents, get_default_prompts,
 )
+from app.services.ai_service import generate_ai_analysis
 from app.routers.auth import get_current_user
 
 router = APIRouter(prefix="/api", tags=["api"])
@@ -44,18 +45,25 @@ async def api_search_companies(q: str, db: AsyncSession = Depends(get_db), user:
 
 @router.post("/analysis")
 async def api_analysis(req: AnalysisRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    # Gerar analise
+    # Buscar dados estruturados da CVM
     result = await generate_analysis_360(db, req.empresa)
-
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
+
+    # Gerar analise narrativa com IA
+    ai_analysis = await generate_ai_analysis(
+        data=result,
+        prompt_id=req.prompt_id,
+        custom_prompt=req.custom_prompt,
+    )
+    result["ai_analysis"] = ai_analysis
 
     # Salvar query do usuario
     query = UserQuery(
         user_id=user.id,
         company_name=req.empresa,
-        query_text=req.custom_prompt or req.prompt_id or "analise_360",
-        response_text=f"Analise 360 gerada para {req.empresa}",
+        query_text=req.custom_prompt or req.prompt_id or "visao_geral",
+        response_text=ai_analysis[:2000] if ai_analysis else "",
     )
     db.add(query)
     await db.commit()
